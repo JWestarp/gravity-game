@@ -1,11 +1,15 @@
 import pygame
 import math
 import sys
+from hand_tracker import HandTracker
 
 # Testmodus-Konfiguration
 TEST_MODE = True
 TEST_WINDOW_SIZE = (1200, 800)
-TEST_TIMEOUT_SECONDS = 10
+TEST_TIMEOUT_SECONDS = 30
+
+# Hand-Tracking aktivieren
+USE_HAND_TRACKING = True
 
 # Konstanten
 SPACING = 25
@@ -48,6 +52,18 @@ def main():
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
 
+    # Hand Tracker initialisieren
+    hand_tracker = None
+    if USE_HAND_TRACKING:
+        hand_tracker = HandTracker()
+        if not hand_tracker.start_camera():
+            print("Warnung: Kamera konnte nicht gestartet werden. Fallback auf Maus.")
+            hand_tracker = None
+
+    # Cursor-Position und Geste
+    cursor_x, cursor_y = WIDTH // 2, HEIGHT // 2
+    current_gesture = 'unknown'
+
     # Berechne Gittergröße basierend auf Bildschirmgröße
     CLOTH_WIDTH = WIDTH // SPACING
     CLOTH_HEIGHT = HEIGHT // SPACING
@@ -82,7 +98,20 @@ def main():
 
     while running:
         screen.fill(BG_COLOR)
-        mx, my = pygame.mouse.get_pos()
+
+        # Hand-Tracking oder Maus
+        if hand_tracker:
+            result = hand_tracker.get_hand_position()
+            if result:
+                hx, hy, gesture = result
+                cursor_x = int(hx * WIDTH)
+                cursor_y = int(hy * HEIGHT)
+                current_gesture = gesture
+        else:
+            cursor_x, cursor_y = pygame.mouse.get_pos()
+            current_gesture = 'point'  # Maus schneidet immer
+
+        mx, my = cursor_x, cursor_y
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -148,15 +177,16 @@ def main():
                     s.p2.x += offset_x
                     s.p2.y += offset_y
 
-        # Schneiden mit Maus
-        for s in sticks:
-            if not s.active:
-                continue
-            mid_x = (s.p1.x + s.p2.x) / 2
-            mid_y = (s.p1.y + s.p2.y) / 2
-            dist = math.hypot(mid_x - mx, mid_y - my)
-            if dist < CUT_RADIUS:
-                s.active = False
+        # Schneiden nur bei 'point' Geste (Zeigefinger)
+        if current_gesture == 'point':
+            for s in sticks:
+                if not s.active:
+                    continue
+                mid_x = (s.p1.x + s.p2.x) / 2
+                mid_y = (s.p1.y + s.p2.y) / 2
+                dist = math.hypot(mid_x - mx, mid_y - my)
+                if dist < CUT_RADIUS:
+                    s.active = False
 
         # Zeichnen
         for s in sticks:
@@ -174,13 +204,28 @@ def main():
                 end_pos = (int(s.p2.x), int(s.p2.y))
                 pygame.draw.line(screen, (r, g, b), start_pos, end_pos, 2)
 
-        # Cursor zeichnen
-        pygame.draw.circle(screen, LASER_COLOR, (mx, my), CUT_RADIUS, 2)
+        # Cursor zeichnen (Farbe je nach Geste)
+        if current_gesture == 'point':
+            cursor_color = (255, 0, 0)  # Rot = Schneiden
+        elif current_gesture == 'fist':
+            cursor_color = (0, 100, 255)  # Blau = Schieben
+        else:
+            cursor_color = (255, 255, 0)  # Gelb = Neutral
+
+        pygame.draw.circle(screen, cursor_color, (mx, my), CUT_RADIUS, 2)
         pygame.draw.circle(screen, (255, 255, 255), (mx, my), CUT_RADIUS - 5, 1)
+
+        # Gesten-Anzeige
+        font = pygame.font.Font(None, 36)
+        gesture_text = font.render(f"Geste: {current_gesture}", True, cursor_color)
+        screen.blit(gesture_text, (10, 10))
 
         pygame.display.flip()
         clock.tick(60)
 
+    # Cleanup
+    if hand_tracker:
+        hand_tracker.stop_camera()
     pygame.quit()
     sys.exit()
 
