@@ -45,15 +45,24 @@ class HandTracker:
         options = vision.HandLandmarkerOptions(
             base_options=base_options,
             num_hands=1,
-            min_hand_detection_confidence=0.5,
-            min_hand_presence_confidence=0.5,
-            min_tracking_confidence=0.5
+            min_hand_detection_confidence=0.3,
+            min_hand_presence_confidence=0.3,
+            min_tracking_confidence=0.3
         )
         self.detector = vision.HandLandmarker.create_from_options(options)
         
         self.cap = None
         self.frame_width = 0
         self.frame_height = 0
+        
+        # Smoothing für flüssigere Bewegungen
+        self.smooth_x = 0.5
+        self.smooth_y = 0.5
+        self.smoothing_factor = 0.3  # Niedrigerer Wert = reaktionsschneller
+        
+        # Letztes Frame für Overlay
+        self.last_frame = None
+        self.last_landmarks = None
     
     def _ensure_model(self):
         """Stellt sicher, dass das Hand-Landmark-Model vorhanden ist"""
@@ -89,7 +98,7 @@ class HandTracker:
         Returns:
             tuple: (x, y, gesture) oder None wenn keine Hand erkannt
                    x, y: Normalisierte Position (0-1)
-                   gesture: 'open', 'fist' oder 'unknown'
+                   gesture: 'point', 'fist' oder 'unknown'
         """
         if not self.cap or not self.cap.isOpened():
             return None
@@ -100,6 +109,7 @@ class HandTracker:
         
         # Spiegeln für natürlichere Steuerung
         frame = cv2.flip(frame, 1)
+        self.last_frame = frame.copy()
         
         # BGR zu RGB konvertieren
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -112,20 +122,93 @@ class HandTracker:
         
         if results.hand_landmarks and len(results.hand_landmarks) > 0:
             landmarks = results.hand_landmarks[0]
+            self.last_landmarks = landmarks
             
-            # Mittelpunkt der Hand berechnen (Handgelenk + Mittelfinger-Basis)
-            wrist = landmarks[self.WRIST]
-            middle_mcp = landmarks[self.MIDDLE_FINGER_MCP]
+            # Position der Zeigefingerspitze für präzisere Steuerung
+            index_tip = landmarks[self.INDEX_FINGER_TIP]
             
-            x = (wrist.x + middle_mcp.x) / 2
-            y = (wrist.y + middle_mcp.y) / 2
+            raw_x = index_tip.x
+            raw_y = index_tip.y
+            
+            # Smoothing anwenden (exponentieller gleitender Durchschnitt)
+            self.smooth_x = self.smooth_x * self.smoothing_factor + raw_x * (1 - self.smoothing_factor)
+            self.smooth_y = self.smooth_y * self.smoothing_factor + raw_y * (1 - self.smoothing_factor)
             
             # Geste erkennen
             gesture = self._detect_gesture(landmarks)
             
-            return (x, y, gesture)
+            return (self.smooth_x, self.smooth_y, gesture)
         
+        self.last_landmarks = None
         return None
+    
+    def get_hand_overlay(self, target_width, target_height, alpha=0.3):
+        """
+        Gibt die Hand-Landmarks als Linien-Skelett zurück.
+        
+        Args:
+            target_width: Zielbreite des Overlays
+            target_height: Zielhöhe des Overlays
+            alpha: Transparenz (0-1)
+        
+        Returns:
+            Liste von Linien [(start, end, color), ...] oder None
+        """
+        if self.last_landmarks is None:
+            return None
+        
+        # Hand-Verbindungen definieren
+        connections = [
+            # Daumen
+            (self.WRIST, self.THUMB_CMC),
+            (self.THUMB_CMC, self.THUMB_MCP),
+            (self.THUMB_MCP, self.THUMB_IP),
+            (self.THUMB_IP, self.THUMB_TIP),
+            # Zeigefinger
+            (self.WRIST, self.INDEX_FINGER_MCP),
+            (self.INDEX_FINGER_MCP, self.INDEX_FINGER_PIP),
+            (self.INDEX_FINGER_PIP, self.INDEX_FINGER_DIP),
+            (self.INDEX_FINGER_DIP, self.INDEX_FINGER_TIP),
+            # Mittelfinger
+            (self.WRIST, self.MIDDLE_FINGER_MCP),
+            (self.MIDDLE_FINGER_MCP, self.MIDDLE_FINGER_PIP),
+            (self.MIDDLE_FINGER_PIP, self.MIDDLE_FINGER_DIP),
+            (self.MIDDLE_FINGER_DIP, self.MIDDLE_FINGER_TIP),
+            # Ringfinger
+            (self.WRIST, self.RING_FINGER_MCP),
+            (self.RING_FINGER_MCP, self.RING_FINGER_PIP),
+            (self.RING_FINGER_PIP, self.RING_FINGER_DIP),
+            (self.RING_FINGER_DIP, self.RING_FINGER_TIP),
+            # Kleiner Finger
+            (self.WRIST, self.PINKY_MCP),
+            (self.PINKY_MCP, self.PINKY_PIP),
+            (self.PINKY_PIP, self.PINKY_DIP),
+            (self.PINKY_DIP, self.PINKY_TIP),
+            # Handfläche (MCP-Verbindungen)
+            (self.INDEX_FINGER_MCP, self.MIDDLE_FINGER_MCP),
+            (self.MIDDLE_FINGER_MCP, self.RING_FINGER_MCP),
+            (self.RING_FINGER_MCP, self.PINKY_MCP),
+        ]
+        
+        lines = []
+        points = []
+        
+        for start_idx, end_idx in connections:
+            start_lm = self.last_landmarks[start_idx]
+            end_lm = self.last_landmarks[end_idx]
+            
+            start_pt = (int(start_lm.x * target_width), int(start_lm.y * target_height))
+            end_pt = (int(end_lm.x * target_width), int(end_lm.y * target_height))
+            
+            lines.append((start_pt, end_pt))
+        
+        # Landmark-Punkte für Kreise
+        for landmark in self.last_landmarks:
+            x = int(landmark.x * target_width)
+            y = int(landmark.y * target_height)
+            points.append((x, y))
+        
+        return lines, points
     
     def _detect_gesture(self, landmarks):
         """

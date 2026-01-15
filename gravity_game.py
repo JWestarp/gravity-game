@@ -1,15 +1,18 @@
 import pygame
 import math
 import sys
+import numpy as np
 from hand_tracker import HandTracker
 
 # Testmodus-Konfiguration
 TEST_MODE = True
 TEST_WINDOW_SIZE = (1200, 800)
-TEST_TIMEOUT_SECONDS = 30
+TEST_TIMEOUT_SECONDS = 60
 
 # Hand-Tracking aktivieren
 USE_HAND_TRACKING = True
+SHOW_HAND_OVERLAY = True
+HAND_OVERLAY_ALPHA = 0.25
 
 # Konstanten
 SPACING = 25
@@ -203,6 +206,20 @@ def main():
                 start_pos = (int(s.p1.x), int(s.p1.y))
                 end_pos = (int(s.p2.x), int(s.p2.y))
                 pygame.draw.line(screen, (r, g, b), start_pos, end_pos, 2)
+
+        # Hand-Overlay zeichnen (schematische Hand als Linien)
+        if hand_tracker and SHOW_HAND_OVERLAY:
+            overlay_result = hand_tracker.get_hand_overlay(WIDTH, HEIGHT, HAND_OVERLAY_ALPHA)
+            if overlay_result:
+                hand_lines, hand_points = overlay_result
+                
+                # Linien zeichnen
+                for start_pt, end_pt in hand_lines:
+                    pygame.draw.line(screen, (100, 200, 255), start_pt, end_pt, 2)
+                
+                # Gelenk-Punkte zeichnen
+                for pt in hand_points:
+                    pygame.draw.circle(screen, (150, 230, 255), pt, 4)
 
         # Cursor zeichnen (Farbe je nach Geste)
         if current_gesture == 'point':
