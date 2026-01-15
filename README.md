@@ -2,6 +2,8 @@
 
 An interactive cloth simulation game using Pygame, where a physically simulated grid can be cut with hand gestures tracked via webcam.
 
+![Gravity Game Screenshot](assets/screenshot.png)
+
 ## Current Status
 
 ### Features
@@ -115,12 +117,6 @@ CUT_RADIUS = 30               # Cutting radius
 
 ## Credits
 
-Original cloth simulation code by **Mohsin Ali** ([@MOHCINALE](https://github.com/MOHCINALE))
+Original cloth simulation code by **Mohsin Ali** ([@MOHCINALE](https://www.facebook.com/mohsinale))
 
-Hand tracking integration and enhancements by the current maintainers.
-
----
-
-## License
-
-MIT License
+Hand tracking integration and enhancements by @JWestarp.
