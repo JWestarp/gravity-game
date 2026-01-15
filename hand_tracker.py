@@ -1,6 +1,6 @@
 """
-Hand Tracker Modul für Gravity Game
-Phase 1: Grundlegende Handerkennung mit MediaPipe
+Hand Tracker Module for Gravity Game
+Hand detection using MediaPipe
 """
 
 import cv2
@@ -37,10 +37,10 @@ class HandTracker:
     PINKY_TIP = 20
     
     def __init__(self):
-        # Model-Datei herunterladen falls nicht vorhanden
+        # Download model file if not present
         model_path = self._ensure_model()
         
-        # MediaPipe Hand Landmarker konfigurieren
+        # Configure MediaPipe Hand Landmarker
         base_options = python.BaseOptions(model_asset_path=model_path)
         options = vision.HandLandmarkerOptions(
             base_options=base_options,
@@ -55,29 +55,29 @@ class HandTracker:
         self.frame_width = 0
         self.frame_height = 0
         
-        # Smoothing für flüssigere Bewegungen
+        # Smoothing for fluid movements
         self.smooth_x = 0.5
         self.smooth_y = 0.5
-        self.smoothing_factor = 0.3  # Niedrigerer Wert = reaktionsschneller
+        self.smoothing_factor = 0.3  # Lower value = more responsive
         
-        # Letztes Frame für Overlay
+        # Last frame for overlay
         self.last_frame = None
         self.last_landmarks = None
     
     def _ensure_model(self):
-        """Stellt sicher, dass das Hand-Landmark-Model vorhanden ist"""
+        """Ensures the hand landmark model is available"""
         model_path = os.path.join(os.path.dirname(__file__), "hand_landmarker.task")
         
         if not os.path.exists(model_path):
-            print("Lade Hand-Landmark-Model herunter...")
+            print("Downloading hand landmark model...")
             url = "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task"
             urllib.request.urlretrieve(url, model_path)
-            print("Model heruntergeladen.")
+            print("Model downloaded.")
         
         return model_path
         
     def start_camera(self, camera_index=0):
-        """Startet die Webcam"""
+        """Starts the webcam"""
         self.cap = cv2.VideoCapture(camera_index)
         if self.cap.isOpened():
             self.frame_width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -86,19 +86,19 @@ class HandTracker:
         return False
     
     def stop_camera(self):
-        """Stoppt die Webcam"""
+        """Stops the webcam"""
         if self.cap:
             self.cap.release()
             self.cap = None
     
     def get_hand_position(self):
         """
-        Liest ein Frame und gibt die Handposition zurück.
+        Reads a frame and returns the hand position.
         
         Returns:
-            tuple: (x, y, gesture) oder None wenn keine Hand erkannt
-                   x, y: Normalisierte Position (0-1)
-                   gesture: 'point', 'fist' oder 'unknown'
+            tuple: (x, y, gesture) or None if no hand detected
+                   x, y: Normalized position (0-1)
+                   gesture: 'point', 'fist' or 'unknown'
         """
         if not self.cap or not self.cap.isOpened():
             return None
@@ -107,34 +107,34 @@ class HandTracker:
         if not ret:
             return None
         
-        # Spiegeln für natürlichere Steuerung
+        # Flip for more natural control
         frame = cv2.flip(frame, 1)
         self.last_frame = frame.copy()
         
-        # BGR zu RGB konvertieren
+        # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        # MediaPipe Image erstellen
+        # Create MediaPipe Image
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         
-        # Hand erkennen
+        # Detect hand
         results = self.detector.detect(mp_image)
         
         if results.hand_landmarks and len(results.hand_landmarks) > 0:
             landmarks = results.hand_landmarks[0]
             self.last_landmarks = landmarks
             
-            # Position der Zeigefingerspitze für präzisere Steuerung
+            # Use index finger tip position for precise control
             index_tip = landmarks[self.INDEX_FINGER_TIP]
             
             raw_x = index_tip.x
             raw_y = index_tip.y
             
-            # Smoothing anwenden (exponentieller gleitender Durchschnitt)
+            # Apply smoothing (exponential moving average)
             self.smooth_x = self.smooth_x * self.smoothing_factor + raw_x * (1 - self.smoothing_factor)
             self.smooth_y = self.smooth_y * self.smoothing_factor + raw_y * (1 - self.smoothing_factor)
             
-            # Geste erkennen
+            # Detect gesture
             gesture = self._detect_gesture(landmarks)
             
             return (self.smooth_x, self.smooth_y, gesture)
@@ -144,47 +144,47 @@ class HandTracker:
     
     def get_hand_overlay(self, target_width, target_height, alpha=0.3):
         """
-        Gibt die Hand-Landmarks als Linien-Skelett zurück.
+        Returns hand landmarks as line skeleton.
         
         Args:
-            target_width: Zielbreite des Overlays
-            target_height: Zielhöhe des Overlays
-            alpha: Transparenz (0-1)
+            target_width: Target overlay width
+            target_height: Target overlay height
+            alpha: Transparency (0-1)
         
         Returns:
-            Liste von Linien [(start, end, color), ...] oder None
+            List of lines [(start, end), ...] and points, or None
         """
         if self.last_landmarks is None:
             return None
         
-        # Hand-Verbindungen definieren
+        # Define hand connections
         connections = [
-            # Daumen
+            # Thumb
             (self.WRIST, self.THUMB_CMC),
             (self.THUMB_CMC, self.THUMB_MCP),
             (self.THUMB_MCP, self.THUMB_IP),
             (self.THUMB_IP, self.THUMB_TIP),
-            # Zeigefinger
+            # Index finger
             (self.WRIST, self.INDEX_FINGER_MCP),
             (self.INDEX_FINGER_MCP, self.INDEX_FINGER_PIP),
             (self.INDEX_FINGER_PIP, self.INDEX_FINGER_DIP),
             (self.INDEX_FINGER_DIP, self.INDEX_FINGER_TIP),
-            # Mittelfinger
+            # Middle finger
             (self.WRIST, self.MIDDLE_FINGER_MCP),
             (self.MIDDLE_FINGER_MCP, self.MIDDLE_FINGER_PIP),
             (self.MIDDLE_FINGER_PIP, self.MIDDLE_FINGER_DIP),
             (self.MIDDLE_FINGER_DIP, self.MIDDLE_FINGER_TIP),
-            # Ringfinger
+            # Ring finger
             (self.WRIST, self.RING_FINGER_MCP),
             (self.RING_FINGER_MCP, self.RING_FINGER_PIP),
             (self.RING_FINGER_PIP, self.RING_FINGER_DIP),
             (self.RING_FINGER_DIP, self.RING_FINGER_TIP),
-            # Kleiner Finger
+            # Pinky
             (self.WRIST, self.PINKY_MCP),
             (self.PINKY_MCP, self.PINKY_PIP),
             (self.PINKY_PIP, self.PINKY_DIP),
             (self.PINKY_DIP, self.PINKY_TIP),
-            # Handfläche (MCP-Verbindungen)
+            # Palm (MCP connections)
             (self.INDEX_FINGER_MCP, self.MIDDLE_FINGER_MCP),
             (self.MIDDLE_FINGER_MCP, self.RING_FINGER_MCP),
             (self.RING_FINGER_MCP, self.PINKY_MCP),
@@ -212,17 +212,17 @@ class HandTracker:
     
     def _detect_gesture(self, landmarks):
         """
-        Erkennt ob der Zeigefinger ausgestreckt ist (zum Schneiden) oder Faust.
+        Detects if index finger is extended (for cutting) or fist.
         
         Returns:
-            str: 'point' (Zeigefinger), 'fist' oder 'unknown'
+            str: 'point' (index finger), 'fist' or 'unknown'
         """
-        # Prüfe ob Zeigefinger gestreckt ist
+        # Check if index finger is extended
         index_tip = landmarks[self.INDEX_FINGER_TIP]
         index_pip = landmarks[self.INDEX_FINGER_PIP]
         index_extended = index_tip.y < index_pip.y
         
-        # Prüfe ob andere Finger eingeklappt sind
+        # Check if other fingers are folded
         middle_tip = landmarks[self.MIDDLE_FINGER_TIP]
         middle_pip = landmarks[self.MIDDLE_FINGER_PIP]
         middle_extended = middle_tip.y < middle_pip.y
@@ -235,11 +235,11 @@ class HandTracker:
         pinky_pip = landmarks[self.PINKY_PIP]
         pinky_extended = pinky_tip.y < pinky_pip.y
         
-        # Zeigefinger-Geste: nur Zeigefinger ausgestreckt
+        # Pointing gesture: only index finger extended
         if index_extended and not middle_extended and not ring_extended and not pinky_extended:
             return 'point'
         
-        # Faust: kein Finger ausgestreckt
+        # Fist: no finger extended
         if not index_extended and not middle_extended and not ring_extended and not pinky_extended:
             return 'fist'
         
@@ -247,8 +247,8 @@ class HandTracker:
     
     def get_frame_with_landmarks(self):
         """
-        Gibt das aktuelle Frame mit eingezeichneten Hand-Landmarks zurück.
-        Nützlich für Debugging.
+        Returns the current frame with drawn hand landmarks.
+        Useful for debugging.
         """
         if not self.cap or not self.cap.isOpened():
             return None
@@ -260,26 +260,26 @@ class HandTracker:
         frame = cv2.flip(frame, 1)
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         
-        # MediaPipe Image erstellen
+        # Create MediaPipe Image
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         results = self.detector.detect(mp_image)
         
         if results.hand_landmarks:
             for hand_landmarks in results.hand_landmarks:
-                # Landmarks manuell zeichnen
+                # Draw landmarks manually
                 h, w, _ = frame.shape
                 for i, landmark in enumerate(hand_landmarks):
                     cx, cy = int(landmark.x * w), int(landmark.y * h)
                     cv2.circle(frame, (cx, cy), 5, (0, 255, 0), -1)
                 
-                # Verbindungen zeichnen
+                # Draw connections
                 connections = [
-                    (0, 1), (1, 2), (2, 3), (3, 4),  # Daumen
-                    (0, 5), (5, 6), (6, 7), (7, 8),  # Zeigefinger
-                    (0, 9), (9, 10), (10, 11), (11, 12),  # Mittelfinger
-                    (0, 13), (13, 14), (14, 15), (15, 16),  # Ringfinger
-                    (0, 17), (17, 18), (18, 19), (19, 20),  # Kleiner Finger
-                    (5, 9), (9, 13), (13, 17)  # Handfläche
+                    (0, 1), (1, 2), (2, 3), (3, 4),  # Thumb
+                    (0, 5), (5, 6), (6, 7), (7, 8),  # Index finger
+                    (0, 9), (9, 10), (10, 11), (11, 12),  # Middle finger
+                    (0, 13), (13, 14), (14, 15), (15, 16),  # Ring finger
+                    (0, 17), (17, 18), (18, 19), (19, 20),  # Pinky
+                    (5, 9), (9, 13), (13, 17)  # Palm
                 ]
                 for start, end in connections:
                     start_pt = (int(hand_landmarks[start].x * w), int(hand_landmarks[start].y * h))
@@ -290,46 +290,46 @@ class HandTracker:
 
 
 def test_hand_tracker():
-    """Test-Funktion für den Hand Tracker"""
-    print("Starte Hand Tracker Test...")
-    print("Drücke 'q' zum Beenden")
+    """Test function for the Hand Tracker"""
+    print("Starting Hand Tracker Test...")
+    print("Press 'q' to exit")
     print("")
-    print("Gesten:")
-    print("  - Zeigefinger = 'point' (zum Schneiden)")
-    print("  - Faust = 'fist' (zum Schieben)")
+    print("Gestures:")
+    print("  - Pointing finger = 'point' (for cutting)")
+    print("  - Fist = 'fist' (for pushing)")
     print("")
     
     tracker = HandTracker()
     
     if not tracker.start_camera():
-        print("Fehler: Kamera konnte nicht gestartet werden!")
+        print("Error: Camera could not be started!")
         return
     
     try:
         while True:
-            # Frame mit Landmarks holen
+            # Get frame with landmarks
             frame = tracker.get_frame_with_landmarks()
             
             if frame is None:
                 continue
             
-            # Handposition und Geste holen
+            # Get hand position and gesture
             result = tracker.get_hand_position()
             
             if result:
                 x, y, gesture = result
                 
-                # Info auf Frame anzeigen
-                text = f"Position: ({x:.2f}, {y:.2f}) Geste: {gesture}"
+                # Display info on frame
+                text = f"Position: ({x:.2f}, {y:.2f}) Gesture: {gesture}"
                 cv2.putText(frame, text, (10, 30), 
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
-                # Farbiger Kreis je nach Geste
+                # Colored circle based on gesture
                 color = (0, 255, 0) if gesture == 'point' else (0, 0, 255) if gesture == 'fist' else (255, 255, 0)
                 center = (int(x * frame.shape[1]), int(y * frame.shape[0]))
                 cv2.circle(frame, center, 20, color, -1)
             else:
-                cv2.putText(frame, "Keine Hand erkannt", (10, 30),
+                cv2.putText(frame, "No hand detected", (10, 30),
                            cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
             
             cv2.imshow("Hand Tracker Test", frame)
@@ -340,7 +340,7 @@ def test_hand_tracker():
     finally:
         tracker.stop_camera()
         cv2.destroyAllWindows()
-        print("Test beendet.")
+        print("Test finished.")
 
 
 if __name__ == "__main__":

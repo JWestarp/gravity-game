@@ -4,17 +4,17 @@ import sys
 import numpy as np
 from hand_tracker import HandTracker
 
-# Testmodus-Konfiguration
+# Test mode configuration
 TEST_MODE = True
 TEST_WINDOW_SIZE = (1200, 800)
 TEST_TIMEOUT_SECONDS = 60
 
-# Hand-Tracking aktivieren
+# Hand tracking settings
 USE_HAND_TRACKING = True
 SHOW_HAND_OVERLAY = True
 HAND_OVERLAY_ALPHA = 0.25
 
-# Konstanten
+# Constants
 SPACING = 25
 GRAVITY = 0.8
 BG_COLOR = (5, 5, 10)
@@ -55,19 +55,19 @@ def main():
     pygame.mouse.set_visible(False)
     clock = pygame.time.Clock()
 
-    # Hand Tracker initialisieren
+    # Initialize hand tracker
     hand_tracker = None
     if USE_HAND_TRACKING:
         hand_tracker = HandTracker()
         if not hand_tracker.start_camera():
-            print("Warnung: Kamera konnte nicht gestartet werden. Fallback auf Maus.")
+            print("Warning: Camera could not be started. Falling back to mouse.")
             hand_tracker = None
 
-    # Cursor-Position und Geste
+    # Cursor position and gesture
     cursor_x, cursor_y = WIDTH // 2, HEIGHT // 2
     current_gesture = 'unknown'
 
-    # Berechne Gittergröße basierend auf Bildschirmgröße
+    # Calculate grid size based on screen size
     CLOTH_WIDTH = WIDTH // SPACING
     CLOTH_HEIGHT = HEIGHT // SPACING
 
@@ -102,7 +102,7 @@ def main():
     while running:
         screen.fill(BG_COLOR)
 
-        # Hand-Tracking oder Maus
+        # Hand tracking or mouse
         if hand_tracker:
             result = hand_tracker.get_hand_position()
             if result:
@@ -112,7 +112,7 @@ def main():
                 current_gesture = gesture
         else:
             cursor_x, cursor_y = pygame.mouse.get_pos()
-            current_gesture = 'point'  # Maus schneidet immer
+            current_gesture = 'point'  # Mouse always cuts
 
         mx, my = cursor_x, cursor_y
 
@@ -128,13 +128,13 @@ def main():
                     for p in points:
                         p.pinned = False
 
-        # Timeout für Testmodus
+        # Timeout for test mode
         if TEST_MODE:
             seconds = (pygame.time.get_ticks() - start_ticks) / 1000
             if seconds > TEST_TIMEOUT_SECONDS:
                 running = False
 
-        # Physik-Update
+        # Physics update
         for p in points:
             if not p.pinned:
                 vx = (p.x - p.old_x) * FRICTION
@@ -180,7 +180,7 @@ def main():
                     s.p2.x += offset_x
                     s.p2.y += offset_y
 
-        # Schneiden nur bei 'point' Geste (Zeigefinger)
+        # Cut only with 'point' gesture (index finger)
         if current_gesture == 'point':
             for s in sticks:
                 if not s.active:
@@ -191,7 +191,7 @@ def main():
                 if dist < CUT_RADIUS:
                     s.active = False
 
-        # Zeichnen
+        # Draw cloth
         for s in sticks:
             if s.active:
                 if s.p1.x < -50 or s.p1.x > WIDTH + 50 or s.p1.y > HEIGHT + 50:
@@ -207,34 +207,34 @@ def main():
                 end_pos = (int(s.p2.x), int(s.p2.y))
                 pygame.draw.line(screen, (r, g, b), start_pos, end_pos, 2)
 
-        # Hand-Overlay zeichnen (schematische Hand als Linien)
+        # Draw hand overlay (schematic hand as lines)
         if hand_tracker and SHOW_HAND_OVERLAY:
             overlay_result = hand_tracker.get_hand_overlay(WIDTH, HEIGHT, HAND_OVERLAY_ALPHA)
             if overlay_result:
                 hand_lines, hand_points = overlay_result
                 
-                # Linien zeichnen
+                # Draw lines
                 for start_pt, end_pt in hand_lines:
                     pygame.draw.line(screen, (100, 200, 255), start_pt, end_pt, 2)
                 
-                # Gelenk-Punkte zeichnen
+                # Draw joint points
                 for pt in hand_points:
                     pygame.draw.circle(screen, (150, 230, 255), pt, 4)
 
-        # Cursor zeichnen (Farbe je nach Geste)
+        # Draw cursor (color based on gesture)
         if current_gesture == 'point':
-            cursor_color = (255, 0, 0)  # Rot = Schneiden
+            cursor_color = (255, 0, 0)  # Red = Cutting
         elif current_gesture == 'fist':
-            cursor_color = (0, 100, 255)  # Blau = Schieben
+            cursor_color = (0, 100, 255)  # Blue = Pushing
         else:
-            cursor_color = (255, 255, 0)  # Gelb = Neutral
+            cursor_color = (255, 255, 0)  # Yellow = Neutral
 
         pygame.draw.circle(screen, cursor_color, (mx, my), CUT_RADIUS, 2)
         pygame.draw.circle(screen, (255, 255, 255), (mx, my), CUT_RADIUS - 5, 1)
 
-        # Gesten-Anzeige
+        # Gesture display
         font = pygame.font.Font(None, 36)
-        gesture_text = font.render(f"Geste: {current_gesture}", True, cursor_color)
+        gesture_text = font.render(f"Gesture: {current_gesture}", True, cursor_color)
         screen.blit(gesture_text, (10, 10))
 
         pygame.display.flip()

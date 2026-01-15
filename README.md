@@ -1,36 +1,38 @@
 # Gravity Game - Cloth Simulation
 
-Ein interaktives Tuch-Simulations-Spiel mit Pygame, bei dem ein physikalisch simuliertes Gitter mit dem Mauszeiger geschnitten werden kann.
+An interactive cloth simulation game using Pygame, where a physically simulated grid can be cut with hand gestures tracked via webcam.
 
-## Aktueller Stand
+## Current Status
 
 ### Features
-- **Physik-Simulation**: Verlet-Integration für realistische Stoffphysik
-- **Interaktion**: Schneiden des Gitters mit dem Mauszeiger
-- **Visuelle Effekte**: Spannungsanzeige durch Farbänderung der Verbindungen
-- **Steuerung**:
-  - `ESC` - Beenden
-  - `SPACE` - Gitter zurücksetzen
-  - `R` - Alle Pins lösen (Gitter fällt)
+- **Physics Simulation**: Verlet integration for realistic cloth physics
+- **Hand Tracking**: Control cursor with hand gestures via webcam
+- **Gesture Recognition**: Point finger to cut, make fist to push without cutting
+- **Visual Effects**: Tension display through color changes in connections
+- **Hand Skeleton Overlay**: Schematic display of tracked hand
+- **Controls**:
+  - `ESC` - Exit
+  - `SPACE` - Reset grid
+  - `R` - Release all pins (grid falls)
 
-### Testmodus
-Für die Entwicklung gibt es einen Testmodus:
-- Fenster statt Fullscreen (1200x800)
-- Automatischer Timeout nach 10 Sekunden
-- Aktivierung: `TEST_MODE = True` in `gravity_game.py`
+### Test Mode
+For development, there is a test mode:
+- Window instead of fullscreen (1200x800)
+- Automatic timeout after 60 seconds
+- Activation: `TEST_MODE = True` in `gravity_game.py`
 
 ### Installation
 
 ```bash
-# Virtual Environment erstellen
+# Create virtual environment
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Abhängigkeiten installieren
-pip install pygame
+# Install dependencies
+pip install pygame mediapipe opencv-python
 ```
 
-### Ausführen
+### Running
 
 ```bash
 python gravity_game.py
@@ -38,99 +40,87 @@ python gravity_game.py
 
 ---
 
-## Nächstes Entwicklungsziel: Handsteuerung per Webcam
+## Hand Tracking Features
 
-### Übersicht
-Der Mauszeiger soll durch Handerkennung über die Webcam ersetzt werden. Die Hand des Users steuert den Cursor, und verschiedene Gesten haben unterschiedliche Effekte.
+### Supported Gestures
 
-### Geplante Gesten
+| Gesture | Action |
+|---------|--------|
+| **Pointing finger** | Cut the grid |
+| **Fist** | Touch/push grid (without cutting) |
 
-| Geste | Aktion |
-|-------|--------|
-| **Flache Handfläche** | Schneiden des Gitters |
-| **Faust** | Gitter berühren/schieben (ohne zu schneiden) |
+### Technical Implementation
 
-### Technische Umsetzung (Schrittweise)
+The hand tracking uses:
+- **MediaPipe** by Google for hand landmark detection
+- **OpenCV** for webcam access
+- **21 hand landmarks** tracked per hand
+- **Smoothing algorithm** for fluid cursor movement
 
-#### Phase 1: Bibliothek einbinden
-- [ ] **MediaPipe** von Google für Handerkennung einbinden
-- [ ] OpenCV für Webcam-Zugriff installieren
-- [ ] Grundlegende Webcam-Capture testen
-
-```bash
-pip install mediapipe opencv-python
-```
-
-#### Phase 2: Handerkennung implementieren
-- [ ] Hand-Landmarks erkennen (21 Punkte pro Hand)
-- [ ] Handposition (Mittelpunkt) als Cursor-Position nutzen
-- [ ] Webcam-Feed im Hintergrund verarbeiten
-
-#### Phase 3: Gestenerkennung
-- [ ] Flache Hand erkennen (alle Finger gestreckt)
-- [ ] Faust erkennen (alle Finger geschlossen)
-- [ ] Gesten-Status als Variable verfügbar machen
-
-#### Phase 4: Integration in das Spiel
-- [ ] Cursor-Position durch Handposition ersetzen
-- [ ] Schneiden nur bei flacher Hand aktivieren
-- [ ] "Push"-Modus bei Faust (Gitter bewegen ohne schneiden)
-- [ ] Visuelles Feedback für aktuelle Geste
-
-#### Phase 5: Optimierung
-- [ ] Performance-Optimierung (Threading für Kamera)
-- [ ] Smoothing der Handbewegungen
-- [ ] Kalibrierung für verschiedene Kamera-Positionen
-
-### Architektur-Vorschlag
+### Architecture
 
 ```
 gravity_game/
-├── gravity_game.py      # Hauptspiel (aktuell)
-├── hand_tracker.py      # Neue Datei: Handerkennung
-├── gestures.py          # Neue Datei: Gestenerkennung
-└── config.py            # Neue Datei: Konfiguration
+├── gravity_game.py      # Main game
+├── hand_tracker.py      # Hand detection module
+├── hand_landmarker.task # MediaPipe model (auto-downloaded)
+├── start.sh             # Start script
+└── README.md            # Documentation
 ```
 
-### Relevante MediaPipe-Dokumentation
-- Hand Landmarks: 21 Punkte pro Hand
-- Wichtige Punkte:
-  - `WRIST` (0): Handgelenk
-  - `THUMB_TIP` (4): Daumenspitze
-  - `INDEX_FINGER_TIP` (8): Zeigefingerspitze
-  - `MIDDLE_FINGER_TIP` (12): Mittelfingerspitze
-  - `RING_FINGER_TIP` (16): Ringfingerspitze
-  - `PINKY_TIP` (20): Kleiner Finger Spitze
+### MediaPipe Hand Landmarks
+- Key points:
+  - `WRIST` (0): Wrist
+  - `THUMB_TIP` (4): Thumb tip
+  - `INDEX_FINGER_TIP` (8): Index finger tip (used for cursor)
+  - `MIDDLE_FINGER_TIP` (12): Middle finger tip
+  - `RING_FINGER_TIP` (16): Ring finger tip
+  - `PINKY_TIP` (20): Pinky tip
 
-### Pseudocode für Gestenerkennung
+---
+
+## Configuration
+
+Key settings in `gravity_game.py`:
 
 ```python
-def is_open_hand(landmarks):
-    """Prüft ob alle Finger gestreckt sind"""
-    # Vergleiche Fingerspitzen-Y mit Fingerknöchel-Y
-    # Gestreckt = Spitze höher als Knöchel
-    pass
+# Test mode configuration
+TEST_MODE = True              # Window mode for testing
+TEST_WINDOW_SIZE = (1200, 800)
+TEST_TIMEOUT_SECONDS = 60
 
-def is_fist(landmarks):
-    """Prüft ob Hand zur Faust geballt ist"""
-    # Alle Fingerspitzen nah am Handgelenk
-    pass
+# Hand tracking
+USE_HAND_TRACKING = True      # Enable/disable hand tracking
+SHOW_HAND_OVERLAY = True      # Show hand skeleton overlay
+HAND_OVERLAY_ALPHA = 0.25     # Overlay transparency
+
+# Physics
+SPACING = 25                  # Grid spacing
+GRAVITY = 0.8                 # Gravity strength
+STIFFNESS = 5                 # Constraint iterations
+FRICTION = 0.99               # Movement friction
+CUT_RADIUS = 30               # Cutting radius
 ```
 
 ---
 
-## Abhängigkeiten
+## Dependencies
 
-### Aktuell
 - Python 3.9+
 - pygame 2.6+
-
-### Geplant (für Handsteuerung)
-- mediapipe
+- mediapipe 0.10+
 - opencv-python
 
 ---
 
-## Lizenz
+## Credits
+
+Original cloth simulation code by **Mohsin Ali** ([@MOHCINALE](https://github.com/MOHCINALE))
+
+Hand tracking integration and enhancements by the current maintainers.
+
+---
+
+## License
 
 MIT License
